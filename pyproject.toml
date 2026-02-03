@@ -137,3 +137,19 @@ Pangu    = "makani.models.networks.pangu:Pangu"
 [project.entry-points."physicsnemo.models"]
 SFNO     = "makani.models.networks.sfnonet:SFNO"
 FCN3     = "makani.models.networks.fourcastnet3:FCN3"
+
+[tool.pixi.workspace]
+channels = ["nvidia", "pytorch", "conda-forge"]
+platforms = ["linux-aarch64"]
+
+[tool.pixi.pypi-dependencies]
+makani = { path = ".", editable = true }
+torch = { version = ">=2.4.0", index = "https://download.pytorch.org/whl/cu130" }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+sirfshampoo = { features = ["sirfshampoo"], solve-group = "default" }
+vis = { features = ["vis"], solve-group = "default" }
+
+[tool.pixi.tasks]
