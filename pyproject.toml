@@ -54,9 +54,8 @@ dependencies = [
     "numpy>=1.22.4",
     "h5py>=3.11.0",
     "nvidia-physicsnemo>=0.5.0a0",
-    "torch-harmonics>=0.8.0",
     "wandb>=0.13.7",
-    "numba",
+    "numba>=0.60.0",
     "tqdm>=4.60.0",
     "pynvml>=10.0.0",
     "jsbeautifier",
@@ -142,14 +141,55 @@ FCN3     = "makani.models.networks.fourcastnet3:FCN3"
 channels = ["nvidia", "pytorch", "conda-forge"]
 platforms = ["linux-aarch64"]
 
+[tool.pixi.dependencies]
+python = ">=3.10,<3.13"
+"ruamel.yaml" = "*"
+uv = "*"
+pip = "*"
+mpi4py = ">=4.1.1,<5"
+progressbar2 = "*"
+numba = ">=0.60.0"
+
 [tool.pixi.pypi-dependencies]
 makani = { path = ".", editable = true }
 torch = { version = ">=2.4.0", index = "https://download.pytorch.org/whl/cu130" }
+moviepy = ">=2.0"
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
-dev = { features = ["dev"], solve-group = "default" }
-sirfshampoo = { features = ["sirfshampoo"], solve-group = "default" }
-vis = { features = ["vis"], solve-group = "default" }
+data = { features = ["data"], solve-group = "default" }
+eval = { features = ["benchmark", "scoring"], solve-group = "default" }
+onnx = { features = ["onnx"], solve-group = "default" }
+full = { features = ["data", "benchmark", "scoring", "onnx", "vis"], solve-group = "default" }
 
 [tool.pixi.tasks]
+build-torch-harmonics = { cmd = "pip install --no-build-isolation --no-deps --no-cache-dir torch-harmonics==0.8.0", env = { FORCE_CUDA_EXTENSION = "1", TORCH_CUDA_ARCH_LIST = "12.1", MAX_JOBS = "16" } }
+
+# data feature - ERA5 download & conversion with MPI-enabled HDF5
+[tool.pixi.feature.data.dependencies]
+zarr = "*"
+xarray = "*"
+pandas = "*"
+hdf5 = { version = ">=1.14.0", build = "mpi_openmpi*" }
+h5py = { version = ">=3.13.0", build = "mpi_openmpi*" }
+openmpi = "*"
+
+[tool.pixi.feature.data.pypi-dependencies]
+cdsapi = ">=0.7.2"
+boto3 = "*"
+gcsfs = ">=2025.10.0"
+
+# scoring feature - forecast evaluation metrics
+[tool.pixi.feature.scoring.pypi-dependencies]
+xskillscore = "*"
+properscoring = "*"
+
+# benchmark feature - performance measurement
+[tool.pixi.feature.benchmark.pypi-dependencies]
+benchy = { git = "https://github.com/romerojosh/benchy.git" }
+mlperf-common = { git = "https://github.com/NVIDIA/mlperf-common.git" }
+
+# onnx feature - model export
+[tool.pixi.feature.onnx.pypi-dependencies]
+onnx = "*"
+onnxruntime = "*"
