@@ -16,15 +16,19 @@
 # limitations under the License.
 
 # which version to take:
-dlfw_version=25.05
+dlfw_version=25.11
 
 # gitlab credentials
 gitlab_repo=makani
 gitlab_tag=latest
 
+# detect architecture
+arch=$(uname -m)
+
 cd ../
 
 # build and push
-docker build --network host -t makani:${gitlab_tag}-${dlfw_version} \
+docker build --network host -t makani:${gitlab_tag}-${dlfw_version}-${arch} \
        --build-arg DLFW_VERSION=${dlfw_version} \
+       --build-arg TARGETARCH=${arch} \
        -f docker/Dockerfile .

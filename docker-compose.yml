@@ -1,0 +1,19 @@
+services:
+  makani:
+    image: makani:latest-25.11-aarch64
+    user: "${DOCKER_UID:-nobody}:${DOCKER_GID:-nogroup}"
+    network_mode: host
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    volumes:
+      - .:/workspace/makani
+    working_dir: /workspace/makani
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

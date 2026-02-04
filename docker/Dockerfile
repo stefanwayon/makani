@@ -14,6 +14,7 @@
 # limitations under the License.
 
 ARG DLFW_VERSION
+ARG TARGETARCH=x86_64
 FROM nvcr.io/nvidia/pytorch:${DLFW_VERSION}-py3
 
 # update repo info
@@ -26,8 +27,13 @@ RUN apt remove cmake -y && \
 # install mpi4py
 RUN SETUPTOOLS_USE_DISTUTILS=local pip install mpi4py
 
-# install onnx
-RUN pip install onnx onnxruntime onnxruntime-gpu
+# install onnx (onnxruntime-gpu only available for x86_64)
+ARG TARGETARCH
+RUN if [ "$TARGETARCH" = "x86_64" ]; then \
+        pip install onnx onnxruntime onnxruntime-gpu; \
+    else \
+        pip install onnx onnxruntime; \
+    fi
 
 # hdf5 and h5py
 ENV HDF5_VERSION=1.14.6
@@ -74,7 +80,7 @@ RUN pip install --ignore-installed "git+https://github.com/NVIDIA/mlperf-common.
 
 # torch-harmonics
 ENV FORCE_CUDA_EXTENSION 1
-ENV TORCH_CUDA_ARCH_LIST "8.0 8.6 9.0 10.0 12.0+PTX"
+ENV TORCH_CUDA_ARCH_LIST "8.0 8.6 9.0 10.0 12.0 12.1+PTX"
 ENV HARMONICS_VERSION 0.8.0
 RUN cd /opt && git clone -b v0.8.0 https://github.com/NVIDIA/torch-harmonics.git && \
     cd torch-harmonics && \
