@@ -4,12 +4,18 @@ services:
     user: "${DOCKER_UID:-nobody}:${DOCKER_GID:-nogroup}"
     network_mode: host
     ipc: host
+    environment:
+      - NUMBA_CACHE_DIR=/data/numba_cache
+      - TRITON_CACHE_DIR=/data/triton_cache
     ulimits:
       memlock: -1
       stack: 67108864
     volumes:
-      - .:/workspace/makani
-    working_dir: /workspace/makani
+      - .:/opt/makani
+      - ./data:/data
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro
+    working_dir: /opt/makani
     deploy:
       resources:
         reservations:
