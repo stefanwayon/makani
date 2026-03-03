@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG DLFW_VERSION
+ARG DLFW_VERSION=25.04
 ARG TARGETARCH=x86_64
 FROM nvcr.io/nvidia/pytorch:${DLFW_VERSION}-py3
 
@@ -30,9 +30,9 @@ RUN SETUPTOOLS_USE_DISTUTILS=local pip install mpi4py
 # install onnx (onnxruntime-gpu only available for x86_64)
 ARG TARGETARCH
 RUN if [ "$TARGETARCH" = "x86_64" ]; then \
-        pip install onnx onnxruntime onnxruntime-gpu; \
+    pip install onnx onnxruntime onnxruntime-gpu; \
     else \
-        pip install onnx onnxruntime; \
+    pip install onnx onnxruntime; \
     fi
 
 # hdf5 and h5py

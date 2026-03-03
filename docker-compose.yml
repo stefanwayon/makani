@@ -1,20 +1,27 @@
 services:
   makani:
-    image: makani:latest-25.11-aarch64
+    image: makani:latest-25.11-x86_64
     user: "${DOCKER_UID:-nobody}:${DOCKER_GID:-nogroup}"
     network_mode: host
     ipc: host
     environment:
-      - NUMBA_CACHE_DIR=/data/numba_cache
-      - TRITON_CACHE_DIR=/data/triton_cache
+      - NUMBA_CACHE_DIR=/data/cache/numba
+      - TRITON_CACHE_DIR=/data/cache/triton
+      - WANDB_DATA_DIR=/data/cache/wandb
+      - TORCH_KERNEL_CACHE_PATH=/data/cache/torch_kernels
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      - CUDA_MODULE_LOADING=LAZY
+      - NETRC=/netrc
     ulimits:
       memlock: -1
       stack: 67108864
     volumes:
       - .:/opt/makani
-      - ./data:/data
+      - /data:/data
       - /etc/passwd:/etc/passwd:ro
       - /etc/group:/etc/group:ro
+      - /data/cache/torch_kernels:/home/stefan/.cache/torch/kernels
+      - ~/.netrc:/netrc:ro
     working_dir: /opt/makani
     deploy:
       resources:
