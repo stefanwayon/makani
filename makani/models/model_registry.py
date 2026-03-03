@@ -16,9 +16,7 @@
 import os
 import importlib.util
 
-# we need this here for the code to work
-import importlib_metadata
-from importlib.metadata import EntryPoint, entry_points
+from importlib.metadata import entry_points
 
 import logging
 
@@ -163,12 +161,13 @@ def get_model(params: ParamsBase, use_stochastic_interpolation: bool = False, mu
 
     model_handle = _model_registry.get(params.nettype)
     if model_handle is not None:
-        if isinstance(model_handle, (EntryPoint, importlib_metadata.EntryPoint)):
+        # EntryPoint-like (stdlib or backport importlib_metadata): call .load() to get the callable
+        if hasattr(model_handle, "load") and callable(model_handle.load):
             model_handle = model_handle.load()
 
         model_handle = partial(model_handle, inp_shape=inp_shape, out_shape=out_shape, inp_chans=inp_chans, out_chans=out_chans, **params.to_dict())
     else:
-        raise KeyError(f"No model is registered under the name {name}")
+        raise KeyError(f"No model is registered under the name {params.nettype}")
 
     # use the constraint wrapper
     if hasattr(params, "constraints"):

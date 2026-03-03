@@ -13,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from packaging import version
 import os
 import json
 import datetime as dt
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
 import h5py as h5
@@ -30,6 +31,20 @@ NUM_CHANNELS = 5
 IMG_SIZE_H = 64
 IMG_SIZE_W = 128
 CHANNEL_NAMES = ["u10m", "t2m", "u500", "z500", "t500"]
+
+
+def disable_tf32():
+    # the api for this was changed lately in pytorch
+    if torch.cuda.is_available():
+        if version.parse(torch.__version__) >= version.parse("2.9.0"):
+            torch.backends.cuda.matmul.fp32_precision = "ieee"
+            torch.backends.cudnn.fp32_precision = "ieee"
+            torch.backends.cudnn.conv.fp32_precision = "ieee"
+            torch.backends.cudnn.rnn.fp32_precision = "ieee"
+        else:
+            torch.backends.cuda.matmul.allow_tf32 = False
+            torch.backends.cudnn.allow_tf32 = False
+    return
 
 
 def get_default_parameters():
@@ -49,7 +64,6 @@ def get_default_parameters():
     params.resuming = False
     params.amp_mode = "none"
     params.jit_mode = "none"
-    params.enable_benchy = False
     params.disable_ddp = False
     params.checkpointing_level = 0
     params.enable_synthetic_data = False
@@ -87,7 +101,13 @@ def get_default_parameters():
 
 
 def init_dataset(
-    path: str, num_samples_per_year: Optional[int] = 365, num_channels: Optional[int] = NUM_CHANNELS, img_size_h: Optional[int] = IMG_SIZE_H, img_size_w: Optional[int] = IMG_SIZE_W, annotate=True
+    path: str, 
+    num_samples_per_year: Optional[int] = 365, 
+    num_channels: Optional[int] = NUM_CHANNELS, 
+    img_size_h: Optional[int] = IMG_SIZE_H, 
+    img_size_w: Optional[int] = IMG_SIZE_W, 
+    nan_fraction: Optional[float] = 0.0,
+    annotate: Optional[bool] = True
 ):
 
     test_path = os.path.join(path, "test")
@@ -124,7 +144,23 @@ def init_dataset(
         data_path = os.path.join(train_path, f"{y}.h5")
         with h5.File(data_path, "w") as hf:
             hf.create_dataset(H5_PATH, shape=(num_samples_per_year, num_channels, img_size_h, img_size_w))
-            hf[H5_PATH][...] = rng.random((num_samples_per_year, num_channels, img_size_h, img_size_w), dtype=np.float32)
+
+            num_dof = num_samples_per_year * num_channels * img_size_h * img_size_w
+            data = rng.random((num_dof,), dtype=np.float32)
+
+            # add NaNs
+            if nan_fraction > 0.0:
+                indices = np.arange(num_samples_per_year * num_channels * img_size_h * img_size_w, dtype=np.int32)
+                nan_count = int(nan_fraction * num_dof)
+                rng.shuffle(indices)
+                nan_indices = indices[0:nan_count]
+                data[nan_indices] = np.nan
+
+            # reshape to correct shape
+            data = data.reshape(num_samples_per_year, num_channels, img_size_h, img_size_w)
+
+            # store in file
+            hf[H5_PATH][...] = data[...]
 
             # annotations
             if annotate:

@@ -24,7 +24,7 @@ from tqdm import tqdm
 
 from mpi4py import MPI
 
-from wb2_helpers import split_convert_channel_names
+from .wb2_helpers import split_convert_channel_names
 
 
 def generate_wb2_climatology(metadata_file: str, input_climatology: str, mask_output_file: str, climatology_output_file: str,
@@ -264,7 +264,7 @@ def generate_wb2_climatology(metadata_file: str, input_climatology: str, mask_ou
 
 
 def main(args):
-    generate_wb2_climatology(args.metadata_file, args.input_climatology, args.mask_output_file, args.climatology_output_file, verbose=args.verbose))
+    generate_wb2_climatology(args.metadata_file, args.input_climatology, args.mask_output_file, args.climatology_output_file, verbose=args.verbose)
 
     return
 

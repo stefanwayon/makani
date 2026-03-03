@@ -21,9 +21,6 @@ from typing import Optional
 import numpy as np
 from tqdm import tqdm
 
-# gpu info
-import pynvml
-
 # torch
 import torch
 import torch.optim as optim
@@ -60,7 +57,7 @@ from physicsnemo.distributed.mappings import reduce_from_parallel_region
 from makani.utils.checkpoint_helpers import get_latest_checkpoint_version
 
 # weight normalizing helper
-from makani.utils.training.training_helpers import normalize_weights, clip_grads
+from makani.utils.training.training_helpers import get_memory_usage, normalize_weights, clip_grads
 
 
 class StochasticTrainer(Driver):
@@ -86,11 +83,6 @@ class StochasticTrainer(Driver):
         if dist.is_initialized():
             tens = torch.ones(1, device=self.device)
             dist.all_reduce(tens, group=comm.get_group("data"))
-
-        # nvml stuff
-        if self.log_to_screen:
-            pynvml.nvmlInit()
-            self.nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(self.device.index)
 
         # set amp_parameters
         if hasattr(self.params, "amp_mode") and (self.params.amp_mode != "none"):
@@ -186,27 +178,19 @@ class StochasticTrainer(Driver):
         # gradient clipping
         self.max_grad_norm = self.params.get("optimizer_max_grad_norm", -1.0)
 
-        # we need this further down
-        capture_stream = None
+        # Initialize gradient reduction (DDP-like) hooks on the default stream so that
+        # AccumulateGrad nodes use the same stream as training forward/backward.
         if dist.is_initialized() and not self.params.disable_ddp:
-            if self.device.type == "cuda":
-                capture_stream = torch.Stream(device="cuda")
-
-            with torch.cuda.stream(capture_stream):
-                self.model = init_gradient_reduction_hooks(
-                    self.model,
-                    device=self.device,
-                    reduction_buffer_count=self.params.parameters_reduction_buffer_count,
-                    broadcast_buffers=False,
-                    find_unused_parameters=self.params["enable_grad_anomaly_detection"],
-                    gradient_as_bucket_view=True,
-                    static_graph=False,
-                    verbose=True,
-                )
-
-            # capture stream sync
-            if capture_stream is not None:
-                capture_stream.synchronize()
+            self.model = init_gradient_reduction_hooks(
+                self.model,
+                device=self.device,
+                reduction_buffer_count=self.params.parameters_reduction_buffer_count,
+                broadcast_buffers=False,
+                find_unused_parameters=self.params["enable_grad_anomaly_detection"],
+                gradient_as_bucket_view=True,
+                static_graph=False,
+                verbose=True,
+            )
 
         # lets get one sample from the dataloader:
         # set to train just to be safe
@@ -346,9 +330,8 @@ class StochasticTrainer(Driver):
         # log parameters
         if self.log_to_screen:
             # log memory usage so far
-            all_mem_gb = pynvml.nvmlDeviceGetMemoryInfo(self.nvml_handle).used / (1024.0 * 1024.0 * 1024.0)
-            max_mem_gb = torch.cuda.max_memory_allocated(device=self.device) / (1024.0 * 1024.0 * 1024.0)
-            self.logger.info(f"Scaffolding memory high watermark: {all_mem_gb} GB ({max_mem_gb} GB for pytorch)")
+            all_mem_gb, max_mem_gb = get_memory_usage(self.device)
+            self.logger.info(f"Scaffolding memory high watermark: {all_mem_gb:.2f} GB ({max_mem_gb:.2f} GB for pytorch)")
             # announce training start
             self.logger.info("Starting Training Loop...")
 
@@ -712,7 +695,7 @@ class StochasticTrainer(Driver):
             self.logger.info(f"Performance Parameters:")
             self.logger.info(print_prefix + "training steps: {}".format(train_logs["train_steps"]))
             self.logger.info(print_prefix + "validation steps: {}".format(valid_logs["base"]["validation steps"]))
-            all_mem_gb = pynvml.nvmlDeviceGetMemoryInfo(self.nvml_handle).used / (1024.0 * 1024.0 * 1024.0)
+            all_mem_gb, _ = get_memory_usage(self.device)
             self.logger.info(print_prefix + f"memory footprint [GB]: {all_mem_gb:.2f}")
             for key in timing_logs.keys():
                 self.logger.info(print_prefix + key + ": {:.2f}".format(timing_logs[key]))
