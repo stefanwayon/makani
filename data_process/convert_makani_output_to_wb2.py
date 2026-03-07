@@ -138,7 +138,7 @@ def convert(file_names_to_convert: List[str], output_file: str, batch_size: Opti
                                da.zeros((total_entries, ensemble_size, lead_time, nlat, nlon), chunks=(1, 1, lead_time, nlat, nlon), dtype=dataset_dtype))
         for ac in atmospheric_channel_names_wb2:
             data_arrays[ac] = (["time", "number", "prediction_timedelta", "level", "latitude", "longitude"],
-			       da.zeros((total_entries, ensemble_size, lead_time, nlevels, nlat, nlon), chunks=(1, 1, lead_time, nlevels, nlat, nlon), dtype=dataset_dtype))
+			       da.zeros((total_entries, ensemble_size, lead_time, nlevels, nlat, nlon), chunks=(1, 1, lead_time, 1, nlat, nlon), dtype=dataset_dtype))
 
         # create dataset
         datastore = xr.Dataset(data_arrays,
