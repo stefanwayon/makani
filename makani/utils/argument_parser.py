@@ -57,7 +57,7 @@ def get_default_argument_parser(training=True):
 
     # checkpoint format
     if training:
-        parser.add_argument("--save_checkpoint", default="legacy", choices=["none", "flexible", "legacy"], type=str, help="Format in which to save checkpoints.")
+        parser.add_argument("--save_checkpoint", default=None, choices=["none", "flexible", "legacy"], type=str, help="Format in which to save checkpoints. Defaults to YAML config value.")
     parser.add_argument("--load_checkpoint", default="legacy", choices=["flexible", "legacy"], type=str, help="Format in which to load checkpoints.")
 
     # multistep stuff

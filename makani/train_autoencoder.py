@@ -52,7 +52,8 @@ if __name__ == "__main__":
 
     # checkpoint format
     params["load_checkpoint"] = args.load_checkpoint
-    params["save_checkpoint"] = args.save_checkpoint
+    if args.save_checkpoint is not None:
+        params["save_checkpoint"] = args.save_checkpoint
 
     # make sure to reconfigure logger after the pytorch distributed init
     with Timer() as timer:
