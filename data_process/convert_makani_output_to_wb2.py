@@ -248,11 +248,14 @@ def convert(file_names_to_convert: List[str], output_file: str, batch_size: Opti
 
 def main(args):
     # get files
-    files = glob(os.path.join(args.input_dir, "*.h5"))
+    if args.input_files:
+        files = args.input_files
+    else:
+        files = sorted(glob(os.path.join(args.input_dir, "*.h5")))
 
     if not files:
-        raise RuntimeError("The directory input_dir has to contain h5 files")
-    
+        raise RuntimeError("No input h5 files found")
+
     # concatenate files with timestamp information
     convert(file_names_to_convert=files,
             output_file=args.output_file,
@@ -264,10 +267,12 @@ if __name__ == '__main__':
 
     # argparse
     parser = ap.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, help="Directory with HDF5 input files.", required=True)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--input_dir", type=str, help="Directory with HDF5 input files.")
+    group.add_argument("--input_files", type=str, nargs="+", help="One or more HDF5 input files.")
     parser.add_argument("--output_file", type=str, help="Filename for saving wb2 compatible zarr file file.", required=True)
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for writing chunks")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
-    
+
     main(args)
