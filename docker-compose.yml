@@ -5,6 +5,7 @@ services:
     network_mode: host
     ipc: host
     environment:
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}
       - NUMBA_CACHE_DIR=/data/cache/numba
       - TRITON_CACHE_DIR=/data/cache/triton
       - WANDB_DATA_DIR=/data/cache/wandb
