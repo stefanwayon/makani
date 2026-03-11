@@ -187,8 +187,9 @@ class Inferencer(Driver):
 
         # restore from checkpoint
         checkpoint_path = self.params.checkpoint_path
-        self.checkpoint_version_current = get_latest_checkpoint_version(checkpoint_path)
-        checkpoint_path = checkpoint_path.format(checkpoint_version=self.checkpoint_version_current, mp_rank="{mp_rank}")
+        if "{checkpoint_version}" in checkpoint_path:
+            self.checkpoint_version_current = get_latest_checkpoint_version(checkpoint_path)
+            checkpoint_path = checkpoint_path.format(checkpoint_version=self.checkpoint_version_current, mp_rank="{mp_rank}")
 
         self.restore_from_checkpoint(
             checkpoint_path,

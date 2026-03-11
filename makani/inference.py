@@ -151,6 +151,15 @@ if __name__ == "__main__":
     if args.checkpoint_path is None:
         params["checkpoint_path"] = os.path.join(expDir, "training_checkpoints/ckpt_mp{mp_rank}_v{checkpoint_version}.tar")
         params["best_checkpoint_path"] = os.path.join(expDir, "training_checkpoints/best_ckpt_mp{mp_rank}.tar")
+    elif args.checkpoint_path.endswith(".tar"):
+        if params["load_checkpoint"] == "legacy":
+            if "{mp_rank}" not in args.checkpoint_path:
+                raise ValueError("Legacy checkpoint .tar path must contain {mp_rank} placeholder")
+        else:
+            if "{mp_rank}" in args.checkpoint_path:
+                raise ValueError("Flexible checkpoint .tar path should not contain {mp_rank} placeholder")
+        params["checkpoint_path"] = args.checkpoint_path
+        params["best_checkpoint_path"] = None
     else:
         params["checkpoint_path"] = os.path.join(args.checkpoint_path, "ckpt_mp{mp_rank}_v{checkpoint_version}.tar")
         params["best_checkpoint_path"] = os.path.join(args.checkpoint_path, "best_ckpt_mp{mp_rank}.tar")
