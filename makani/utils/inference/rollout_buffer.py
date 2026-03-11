@@ -21,6 +21,7 @@ import torch
 import numpy as np
 import h5py as h5
 import makani.utils.constants as const
+from makani.utils.inference.helpers import compute_crop_indices, compute_local_crop
 
 # distributed computing stuff
 from torch import amp
@@ -159,6 +160,7 @@ class RolloutBuffer(DataBuffer):
         output_channels: List[str] = [],
         output_file: Optional[str] = None,
         output_memory_buffer_size: Optional[int] = None,
+        output_region: Optional[Tuple[float, float, float, float]] = None,
     ):
         super().__init__(num_rollout_steps, rollout_dt, channel_names, device, scale, bias, output_channels, output_file)
 
@@ -193,6 +195,26 @@ class RolloutBuffer(DataBuffer):
         self.rollout_data_cpu = torch.zeros(local_buffer_size, dtype=torch.float32, device="cpu", pin_memory=pin_memory)
         self.timestamp_data_cpu = torch.zeros((self.num_buffered_samples), dtype=torch.float64, device="cpu", pin_memory=pin_memory)
 
+        if output_region is None:
+            # no cropping, save the full buffer
+            self.buffer_idx = (slice(None), slice(None))
+
+            lat_range = slice(self.local_offset[0], self.local_offset[0] + self.local_shape[0])
+            lon_range = slice(self.local_offset[1], self.local_offset[1] + self.local_shape[1])
+
+            self.tile_has_output = True
+            self.out_idx = (lat_range, lon_range)
+            self.out_lat_lon = self.lat_lon
+            self.out_img_shape = self.img_shape
+        else:
+            # compute crop indices
+            crop_global_idx = compute_crop_indices(self.lat_lon, output_region)
+            self.buffer_idx, self.out_idx = compute_local_crop(crop_global_idx, self.local_offset, self.local_shape)
+            
+            self.tile_has_output = all([s.start != s.stop for s in self.out_idx])
+            self.out_lat_lon = np.array(lat_lon[0])[crop_global_idx[0]], np.array(lat_lon[1])[crop_global_idx[1]]
+            self.out_img_shape = len(crop_global_idx[0]), len(crop_global_idx[1])
+
         # open output_file
         self.file_handle = None
         if self.output_file is not None:
@@ -216,7 +238,7 @@ class RolloutBuffer(DataBuffer):
             self.file_handle = h5.File(output_file, "w")
 
         # create hdf5 dataset
-        total_buffer_size = (self.num_samples_total, self.num_rollout_steps + 1, self.ensemble_size * comm.get_size("ensemble"), self.num_channels, *self.img_shape)
+        total_buffer_size = (self.num_samples_total, self.num_rollout_steps + 1, self.ensemble_size * comm.get_size("ensemble"), self.num_channels, *self.out_img_shape)
         self.rollout_buffer_disk = self.file_handle.create_dataset("fields", total_buffer_size, dtype=np.float32)
 
         # create timestamps for scale
@@ -241,16 +263,16 @@ class RolloutBuffer(DataBuffer):
             chans[...] = self.output_channels
 
         # create lon and lat descriptors
-        lats = self.file_handle.create_dataset("lat", len(self.lat_lon[0]), dtype=np.float32)
+        lats = self.file_handle.create_dataset("lat", len(self.out_lat_lon[0]), dtype=np.float32)
         lats.make_scale("lat")
         self.rollout_buffer_disk.dims[4].attach_scale(lats)
         if comm.get_world_rank() == 0:
-            lats[...] = np.array(self.lat_lon[0], dtype=np.float32)
-        lons = self.file_handle.create_dataset("lon", len(self.lat_lon[1]), dtype=np.float32)
+            lats[...] = np.array(self.out_lat_lon[0], dtype=np.float32)
+        lons = self.file_handle.create_dataset("lon", len(self.out_lat_lon[1]), dtype=np.float32)
         lons.make_scale("lon")
         self.rollout_buffer_disk.dims[5].attach_scale(lons)
         if comm.get_world_rank() == 0:
-            lons[...] = np.array(self.lat_lon[1], dtype=np.float32)
+            lons[...] = np.array(self.out_lat_lon[1], dtype=np.float32)
 
         # label dimensions for more information
         self.rollout_buffer_disk.dims[0].label = "Timestamp in UTC time zone"
@@ -300,14 +322,16 @@ class RolloutBuffer(DataBuffer):
             ens_range = slice(ens_start, ens_start + self.ensemble_size)
 
             # spatial range
-            lat_range = slice(self.local_offset[0], self.local_offset[0] + self.local_shape[0])
-            lon_range = slice(self.local_offset[1], self.local_offset[1] + self.local_shape[1])
+            lat_range, lon_range = self.out_idx
+            buf_lat_range, buf_lon_range = self.buffer_idx
 
             # concurrent writing
             if (comm.get_rank("model") == 0) and (comm.get_rank("ensemble") == 0):
                 tarr = self.timestamp_data_cpu.numpy()
                 self.timestamp_buffer_disk[batch_range] = tarr[batch_range_buffer, ...]
-            self.rollout_buffer_disk[batch_range, :, ens_range, :, lat_range, lon_range] = self.rollout_data_cpu.numpy()[batch_range_buffer, ...]
+            
+            if self.tile_has_output:
+                self.rollout_buffer_disk[batch_range, :, ens_range, :, lat_range, lon_range] = self.rollout_data_cpu.numpy()[batch_range_buffer, :, :, :, buf_lat_range, buf_lon_range]
 
         # reset buffers
         self.zero_buffers()

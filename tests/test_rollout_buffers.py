@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import unittest
+from unittest.mock import patch
 from parameterized import parameterized
 import tempfile
 import os
@@ -23,7 +24,7 @@ import torch
 import h5py as h5
 from typing import Optional
 
-from makani.utils.inference.rollout_buffer import TemporalAverageBuffer
+from makani.utils.inference.rollout_buffer import RolloutBuffer, TemporalAverageBuffer
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from .testutils import disable_tf32, init_dataset, get_default_parameters, compare_arrays, H5_PATH, IMG_SIZE_H, IMG_SIZE_W
@@ -262,6 +263,138 @@ class TestRolloutBuffers(unittest.TestCase):
             self.assertTrue(compare_arrays("mean", buffer_mean, manual_mean, atol=0.0, rtol=1e-5))
         with self.subTest(desc="std"):
             self.assertTrue(compare_arrays("std", buffer_std, manual_std, atol=0.0, rtol=1e-5))
+
+
+class TestRolloutBufferOutputCrop(unittest.TestCase):
+    """Test output cropping in RolloutBuffer with simulated spatial parallelism.
+
+    Uses a 48x48 grid split into 6 tiles with unequal shapes (3 rows x 2 cols).
+    Row heights: 20, 12, 16. Col widths: row 0 -> 20/28, rows 1-2 -> 30/18.
+    Ground truth has unique values per cell (lat * 100 + lon) so any mis-placed
+    tile is immediately visible.
+    """
+
+    def setUp(self):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.tmpdir = tempfile.TemporaryDirectory()
+
+        self.img_shape = (48, 48)
+        self.lat_lon = (list(map(float, range(48))), list(map(float, range(48))))
+        self.channel_names = ["t2m"]
+        self.output_channels = ["t2m"]
+
+        self.tiles = [
+            ((0, 0), (20, 20)),    # row 0 col 0
+            ((0, 20), (20, 28)),   # row 0 col 1 (wider — double overlap in wrap test)
+            ((20, 0), (12, 30)),   # row 1 col 0
+            ((20, 30), (12, 18)),  # row 1 col 1
+            ((32, 0), (16, 30)),   # row 2 col 0
+            ((32, 30), (16, 18)),  # row 2 col 1
+        ]
+
+        self.ground_truth = (np.arange(48)[:, None] * 100 + np.arange(48)[None, :]).astype(np.float32)
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def _setup_comm(self, mock_comm):
+        mock_comm.is_distributed.return_value = False
+        mock_comm.get_size.return_value = 1
+        mock_comm.get_rank.return_value = 0
+        mock_comm.get_world_size.return_value = 1
+        mock_comm.get_world_rank.return_value = 0
+
+    def _make_buffers(self, output_file, output_region=None):
+        """Create a RolloutBuffer per tile; rank 0 creates the file, others share it."""
+        buf0 = RolloutBuffer(
+            num_samples=1,
+            batch_size=1,
+            num_rollout_steps=1,
+            rollout_dt=6,
+            ensemble_size=1,
+            img_shape=self.img_shape,
+            local_shape=self.tiles[0][1],
+            local_offset=self.tiles[0][0],
+            channel_names=self.channel_names,
+            lat_lon=self.lat_lon,
+            device=self.device,
+            output_channels=self.output_channels,
+            output_file=output_file,
+            output_region=output_region,
+        )
+
+        buffers = [buf0]
+        for offset, shape in self.tiles[1:]:
+            with patch.object(RolloutBuffer, '_create_output_file'):
+                buf = RolloutBuffer(
+                    num_samples=1,
+                    batch_size=1,
+                    num_rollout_steps=1,
+                    rollout_dt=6,
+                    ensemble_size=1,
+                    img_shape=self.img_shape,
+                    local_shape=shape,
+                    local_offset=offset,
+                    channel_names=self.channel_names,
+                    lat_lon=self.lat_lon,
+                    device=self.device,
+                    output_channels=self.output_channels,
+                    output_file=output_file,
+                    output_region=output_region,
+                )
+            buf.file_handle = buf0.file_handle
+            buf.rollout_buffer_disk = buf0.rollout_buffer_disk
+            buf.timestamp_buffer_disk = buf0.timestamp_buffer_disk
+            buffers.append(buf)
+
+        return buffers
+
+    def _fill_and_flush(self, buffers):
+        """Fill each buffer with its ground truth tile and flush to disk."""
+        for buf, (offset, shape) in zip(buffers, self.tiles):
+            lat_off, lon_off = offset
+            lat_h, lon_w = shape
+            tile_data = self.ground_truth[lat_off:lat_off + lat_h, lon_off:lon_off + lon_w]
+            pred = torch.from_numpy(tile_data).to(self.device).reshape(1, 1, 1, lat_h, lon_w)
+            tstamps = torch.tensor([1000.0], dtype=torch.float64)
+            buf.update(pred, tstamps, 0)
+            buf.update(pred, tstamps, 1)
+            buf._flush_to_disk()
+
+    @patch('makani.utils.inference.rollout_buffer.comm')
+    def test_no_crop(self, mock_comm):
+        """All 6 tiles assemble into full 48x48 grid."""
+        self._setup_comm(mock_comm)
+        output_file = os.path.join(self.tmpdir.name, "no_crop.h5")
+
+        buffers = self._make_buffers(output_file)
+        self._fill_and_flush(buffers)
+        buffers[0].file_handle.close()
+
+        with h5.File(output_file, "r") as hf:
+            lats = hf["lat"][:]
+            lons = hf["lon"][:]
+            expected = lats[:, None] * 100 + lons[None, :]
+            np.testing.assert_array_equal(hf["fields"][0, 0, 0, 0, :, :], expected)
+
+    @patch('makani.utils.inference.rollout_buffer.comm')
+    def test_crop_with_lon_wrap(self, mock_comm):
+        """Cropped output with lon wrapping: 2 full, 2 partial (incl. double-overlap), 2 empty tiles."""
+        self._setup_comm(mock_comm)
+        output_file = os.path.join(self.tmpdir.name, "crop.h5")
+        crop_region = (0, 31, 45, 29)
+
+        buffers = self._make_buffers(output_file, output_region=crop_region)
+        self._fill_and_flush(buffers)
+        buffers[0].file_handle.close()
+
+        with h5.File(output_file, "r") as hf:
+            lats = hf["lat"][:]
+            lons = hf["lon"][:]
+            assert (lats == np.arange(0, 32)).all()
+            assert (lons == np.r_[np.arange(30), 45, 46, 47]).all()
+            expected = lats[:, None] * 100 + lons[None, :]
+            np.testing.assert_array_equal(hf["fields"][0, 0, 0, 0, :, :], expected)
 
 
 if __name__ == "__main__":

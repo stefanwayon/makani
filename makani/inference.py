@@ -68,6 +68,9 @@ if __name__ == "__main__":
         help="At what interval to sample initial conditions. Needs to be an integer number specifying the step in terms of dhours.",
     )
     parser.add_argument("--wb2_compatible", action="store_true", help="Makes metrics and quadratures compatible with weatherbench2.")
+    parser.add_argument("--output_region", default=None, nargs=4, type=float,
+                        metavar=("MIN_LAT", "MAX_LAT", "MIN_LON", "MAX_LON"),
+                        help="Crop output to a geographic bounding box. Longitude wraps if MIN_LON > MAX_LON.")
 
     # parse
     args = parser.parse_args()
@@ -143,6 +146,7 @@ if __name__ == "__main__":
     spectrum_file = os.path.join(params["experiment_dir"], "scores", args.spectrum_file) if args.spectrum_file is not None else None
     zonal_spectrum_file = os.path.join(params["experiment_dir"], "scores", args.zonal_spectrum_file) if args.zonal_spectrum_file is not None else None
     output_memory_buffer_size = args.output_memory_buffer_size
+    output_region = tuple(args.output_region) if args.output_region is not None else None
 
     if args.checkpoint_path is None:
         params["checkpoint_path"] = os.path.join(expDir, "training_checkpoints/ckpt_mp{mp_rank}_v{checkpoint_version}.tar")
@@ -227,6 +231,7 @@ if __name__ == "__main__":
                     end_date=args.end_date,
                     date_step=args.date_step,
                     wb2_compatible=args.wb2_compatible,
+                    output_region=output_region,
                     profiler=profiler,
                 )
         elif args.capture_type == "cupti":
@@ -244,6 +249,7 @@ if __name__ == "__main__":
                         end_date=args.end_date,
                         date_step=args.date_step,
                         wb2_compatible=args.wb2_compatible,
+                        output_region=output_region,
                         profiler=profiler,
                     )
 
@@ -260,6 +266,7 @@ if __name__ == "__main__":
             end_date=args.end_date,
             date_step=args.date_step,
             wb2_compatible=args.wb2_compatible,
+            output_region=output_region,
         )
 
     # cleanup
