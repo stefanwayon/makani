@@ -46,8 +46,6 @@ if [[ -n "$SLURM_ARRAY_TASK_ID" ]]; then
     # Last task gets the original end date; others subtract 1 day to avoid overlap (dates are inclusive)
     if [[ $SLURM_ARRAY_TASK_ID -eq $((SLURM_ARRAY_TASK_COUNT - 1)) ]]; then
         CHUNK_END=$END_EPOCH
-    else
-        CHUNK_END=$((CHUNK_END - 86400))
     fi
     START_DATE=$(date -d "@$CHUNK_START" +%Y-%m-%d)
     END_DATE=$(date -d "@$CHUNK_END" +%Y-%m-%d)
