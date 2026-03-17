@@ -3,6 +3,8 @@ services:
     image: makani:latest-25.11-x86_64
     user: "${DOCKER_UID:-nobody}:${DOCKER_GID:-nogroup}"
     network_mode: host
+    init: true
+    stop_signal: SIGINT
     ipc: host
     environment:
       - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}
