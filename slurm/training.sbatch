@@ -9,6 +9,7 @@
 #
 # Examples:
 #   sbatch training.sbatch --yaml_config ... --config fcn3_ensemble_2lw --run_num ifs_finetune
+set -x
 
 DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose run --rm makani \
     mpirun -np 8 --host localhost:8 \
