@@ -23,6 +23,7 @@ services:
       - /etc/passwd:/etc/passwd:ro
       - /etc/group:/etc/group:ro
       - /data/cache/home_cache:/home/${USER}/.cache
+      - /data/cache/home_local:/home/${USER}/.local
       - ~/.netrc:/netrc:ro
     working_dir: /opt/makani
     deploy:
