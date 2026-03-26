@@ -12,12 +12,13 @@ services:
       - NUMBA_CACHE_DIR=/data/cache/numba
       - TRITON_CACHE_DIR=/data/cache/triton
       - WANDB_DATA_DIR=/data/cache/wandb
+      - TORCH_KERNEL_CACHE_PATH=/data/cache/torch_kernels
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
       - CUDA_MODULE_LOADING=LAZY
+      - HOME=/home/${USER}
       - NETRC=/netrc
-    ulimits:
-      memlock: -1
-      stack: 67108864
+      - OMPI_ALLOW_RUN_AS_ROOT=1
+      - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
     volumes:
       - .:/opt/makani
       - /data:/data
@@ -25,6 +26,7 @@ services:
       - /etc/group:/etc/group:ro
       - /data/cache/home_cache:/home/${USER}/.cache
       - /data/cache/home_local:/home/${USER}/.local
+      - /data/cache/torch_kernels:/home/${USER}/.cache/torch/kernels
       - ~/.netrc:/netrc:ro
     working_dir: /opt/makani
     deploy:
