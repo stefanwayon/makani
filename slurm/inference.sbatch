@@ -73,8 +73,12 @@ fi
 cd ~/makani
 
 set -x
-export DOCKER_UID=$(id -u) DOCKER_GID=$(id -g)
-exec docker compose run --rm makani \
+source "$(dirname "$0")/docker-common.sh"
+echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
+echo "SLURM_JOB_GPUS=${SLURM_JOB_GPUS} SLURM_GPUS_ON_NODE=${SLURM_GPUS_ON_NODE}"
+nvidia-smi -L
+
+docker compose run --name $CONTAINER_NAME --rm makani \
     mpirun -np ${NGPUS} --host localhost:${NGPUS} \
     python -u makani/inference.py \
       --climatology_file /data/climatology.h5 \
@@ -93,5 +97,6 @@ exec docker compose run --rm makani \
           u500  v500  t500  z500 \
       --output_region 60 36 350.7 45 \
       --output_memory_buffer_size 10 \
-      "${ARGS[@]}"
+      "${ARGS[@]}" &
+wait $!
 set +x

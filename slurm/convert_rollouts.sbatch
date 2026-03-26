@@ -15,9 +15,12 @@ NPROCS="${NPROCS:-4}"
 cd ~/makani
 
 set -x
-DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose run --rm makani \
+source "$(dirname "$0")/docker-common.sh"
+
+docker compose run --name $CONTAINER_NAME --rm makani \
     mpirun -np ${NPROCS} --host localhost:${NPROCS} \
     python -u data_process/convert_makani_output_to_wb2.py \
       --verbose \
-      "$@"
+      "$@" &
+wait $!
 set +x

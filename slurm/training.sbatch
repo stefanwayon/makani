@@ -10,8 +10,9 @@
 # Examples:
 #   sbatch training.sbatch --yaml_config ... --config fcn3_ensemble_2lw --run_num ifs_finetune
 set -x
+source "$(dirname "$0")/docker-common.sh"
 
-DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose run --rm makani \
+docker compose run --name $CONTAINER_NAME --rm makani \
     mpirun -np 8 --host localhost:8 \
     python -u makani/ensemble.py \
       --load_checkpoint flexible \
@@ -20,4 +21,5 @@ DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose run --rm makani \
       --w_parallel_size 4 \
       --multistep_count 8 \
       --checkpointing_level 3 \
-      "$@"
+      "$@" &
+wait $!
