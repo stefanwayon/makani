@@ -1,7 +1,7 @@
 services:
   makani:
     image: makani:latest-25.11-x86_64
-    user: "${DOCKER_UID:-nobody}:${DOCKER_GID:-nogroup}"
+    # user: "${DOCKER_UID:-nobody}:${DOCKER_GID:-nogroup}"
     network_mode: host
     init: true
     stop_signal: SIGINT
@@ -19,6 +19,9 @@ services:
       - NETRC=/netrc
       - OMPI_ALLOW_RUN_AS_ROOT=1
       - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+    # ulimits:
+    #   memlock: -1
+    #   stack: 67108864
     volumes:
       - .:/opt/makani
       - /data:/data
