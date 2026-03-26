@@ -16,7 +16,7 @@
 # limitations under the License.
 
 # which version to take:
-dlfw_version=25.11
+dlfw_version=25.12
 
 # gitlab credentials
 gitlab_repo=makani
