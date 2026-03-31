@@ -71,6 +71,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_region", default=None, nargs=4, type=float,
                         metavar=("MIN_LAT", "MAX_LAT", "MIN_LON", "MAX_LON"),
                         help="Crop output to a geographic bounding box. Longitude wraps if MIN_LON > MAX_LON.")
+    parser.add_argument("--rollout_steps", default=None, type=int,
+                        help="Number of autoregressive rollout steps. Overrides valid_autoreg_steps from YAML config.")
 
     # parse
     args = parser.parse_args()
@@ -181,6 +183,8 @@ if __name__ == "__main__":
     params["enable_synthetic_data"] = args.enable_synthetic_data
     params["split_data_channels"] = args.split_data_channels
     params["n_future"] = 0
+    if args.rollout_steps is not None:
+        params["valid_autoreg_steps"] = args.rollout_steps - 1
     params["mask_file"] = args.mask_file
     params["climatology_file"] = args.climatology_file
 
