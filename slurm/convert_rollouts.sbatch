@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=convert-wb2
 #SBATCH --gres=gpu:0
+#SBATCH --requeue
 #SBATCH --output=logs/slurm-%j.log
 #SBATCH --error=logs/slurm-%j.log
 
@@ -15,7 +16,7 @@ NPROCS="${NPROCS:-4}"
 cd ~/makani
 
 set -x
-source "$(dirname "$0")/docker-common.sh"
+source ~/makani/slurm/docker-common.sh
 
 docker compose run --name $CONTAINER_NAME --rm makani \
     mpirun -np ${NPROCS} --host localhost:${NPROCS} \
@@ -23,4 +24,5 @@ docker compose run --name $CONTAINER_NAME --rm makani \
       --verbose \
       "$@" &
 wait $!
+DOCKER_EXIT_CODE=$?
 set +x

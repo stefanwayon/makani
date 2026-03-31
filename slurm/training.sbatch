@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=training
 #SBATCH --gres=gpu:8
+#SBATCH --requeue
 #SBATCH --output=logs/slurm-%j.log
 #SBATCH --error=logs/slurm-%j.log
 
@@ -10,11 +11,11 @@
 # Examples:
 #   sbatch training.sbatch --yaml_config ... --config fcn3_ensemble_2lw --run_num ifs_finetune
 set -x
-source "$(dirname "$0")/docker-common.sh"
+source ~/makani/slurm/docker-common.sh
 
 docker compose run --name $CONTAINER_NAME --rm makani \
     mpirun -np 8 --host localhost:8 \
-    python -u makani/ensemble.py \
+    python -W error::RuntimeWarning -u makani/ensemble.py \
       --load_checkpoint flexible \
       --amp_mode bf16 \
       --h_parallel_size 2 \
@@ -23,3 +24,4 @@ docker compose run --name $CONTAINER_NAME --rm makani \
       --checkpointing_level 3 \
       "$@" &
 wait $!
+DOCKER_EXIT_CODE=$?

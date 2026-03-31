@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=inference
 #SBATCH --gres=gpu:8
+#SBATCH --requeue
 #SBATCH --output=logs/slurm-%A_%a.log
 #SBATCH --error=logs/slurm-%A_%a.log
 
@@ -73,7 +74,7 @@ fi
 cd ~/makani
 
 set -x
-source "$(dirname "$0")/docker-common.sh"
+source ~/makani/slurm/docker-common.sh
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
 echo "SLURM_JOB_GPUS=${SLURM_JOB_GPUS} SLURM_GPUS_ON_NODE=${SLURM_GPUS_ON_NODE}"
 nvidia-smi -L
@@ -96,7 +97,9 @@ docker compose run --name $CONTAINER_NAME --rm makani \
           u850  v850  t850  z850 \
           u500  v500  t500  z500 \
       --output_region 60 36 350.7 45 \
+      --rollout_steps 60 \
       --output_memory_buffer_size 10 \
       "${ARGS[@]}" &
 wait $!
+DOCKER_EXIT_CODE=$?
 set +x
