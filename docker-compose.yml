@@ -19,6 +19,8 @@ services:
       - NETRC=/netrc
       - OMPI_ALLOW_RUN_AS_ROOT=1
       - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+      - NCCL_TIMEOUT=1800000
+      - TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
     # ulimits:
     #   memlock: -1
     #   stack: 67108864
